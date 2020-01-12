@@ -1,5 +1,3 @@
-import 'dart:collection';
-
 import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
 
@@ -15,9 +13,14 @@ class MyApp extends StatelessWidget {
       ),
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Lock screen'),
+          title: Text('Lock screen demo'),
         ),
-        body: LockScreen(),
+        body: Center(
+          child: LockScreen(
+            size: Size.square(300),
+            password: [0, 1, 2],
+          ),
+        ),
       ),
     );
   }
@@ -26,93 +29,99 @@ class MyApp extends StatelessWidget {
 class LockScreen extends StatefulWidget {
   const LockScreen({
     Key key,
+    this.rowCount = 3,
+    this.columnCount = 3,
+    this.dotGap = 100,
+    this.dotRadius = 5,
+    this.size = const Size(300, 300),
+    @required this.password,
   }) : super(key: key);
+
+  final List<int> password;
+  final int rowCount;
+  final int columnCount;
+  final double dotGap;
+  final double dotRadius;
+  final Size size;
+  // final Paint dotPaint;
+  // final Paint linePaint;
 
   @override
   _LockScreenState createState() => _LockScreenState();
 }
 
 class _LockScreenState extends State<LockScreen> {
-  List<Offset> _path = [];
-  Offset _touchPosition;
-  static const _password = [
-    [0, 1],
-    [1, 1],
-    [1, 2],
-    [2, 2],
-    [2, 1],
-  ];
-  bool _isInteractive = true;
+  List<Offset> _dotPositions;
+  List<int> _selectedDotIndices = [];
 
-  bool isPasswordCorrect() {
-    HashMap<Offset, List<int>> polePositionToIndices = HashMap();
-    for (int xIndex = 0; xIndex < MyPainter.xValues.length; xIndex++) {
-      for (int yIndex = 0; yIndex < MyPainter.yValues.length; yIndex++) {
-        final polePosition =
-            Offset(MyPainter.xValues[xIndex], MyPainter.yValues[yIndex]);
-        polePositionToIndices[polePosition] = [xIndex, yIndex];
+  Offset _touchPosition;
+  bool _isWrong = false;
+
+  List<Offset> calculateDotPositions() {
+    final gridWidth = widget.dotGap * (widget.columnCount - 1);
+    final gridHeight = widget.dotGap * (widget.rowCount - 1);
+    final shift =
+        Offset(widget.size.width - gridWidth, widget.size.height - gridHeight) /
+            2;
+    List<Offset> dotPositions = [];
+
+    for (var r = 0; r < widget.rowCount; r++) {
+      for (var c = 0; c < widget.columnCount; c++) {
+        final dot = Offset(c * widget.dotGap, r * widget.dotGap);
+        dotPositions.add(dot + shift);
       }
     }
-    final _enteredPassword = _path
-        .map((polePosition) => polePositionToIndices[polePosition])
-        .toList();
-    return _enteredPassword.toString() == _password.toString();
+    return dotPositions;
+  }
+
+  void onPanUpdate(DragUpdateDetails details) {
+    if (_isWrong) return;
+    setState(() {
+      _touchPosition = details.localPosition;
+    });
+    // if one is close enough and index is not in _selected, add index to _selected and vibrate
+    final selectedDotIndex = _dotPositions.indexWhere(
+        (position) => (details.localPosition - position).distance < 30);
+
+    if (selectedDotIndex != -1 &&
+        !_selectedDotIndices.contains(selectedDotIndex)) {
+      setState(() {
+        _selectedDotIndices.add(selectedDotIndex);
+        print(_selectedDotIndices);
+      });
+      Vibration.vibrate(duration: 20, amplitude: 255);
+    }
+  }
+
+  void onPanEnd(DragEndDetails details) {
+    if (_isWrong) return;
+    // check selected for correctness if selected is not empty
+    // if wrong set _isWrong = true for 1 second, call onWrongEntry
+    // else call onCorrectEntry
+    setState(() {
+      _selectedDotIndices = [];
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _dotPositions = calculateDotPositions();
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onPanUpdate: (DragUpdateDetails details) {
-        if (!_isInteractive) return;
-        setState(() {
-          _touchPosition = details.localPosition;
-        });
-        for (final x in MyPainter.xValues) {
-          for (final y in MyPainter.yValues) {
-            final pole = Offset(x, y);
-            final isClose = (pole - details.localPosition).distance < 30;
-            final isNotSelected = !_path.contains(pole);
-            if (isClose && isNotSelected) {
-              setState(() {
-                _path.add(pole);
-                Vibration.vibrate(duration: 20, amplitude: 255);
-              });
-            }
-          }
-        }
-      },
-      onPanEnd: (DragEndDetails details) {
-        if (!_isInteractive) return;
-        if (isPasswordCorrect()) {
-          Scaffold.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Correct password'),
-            ),
-          );
-          setState(() {
-            _path = [];
-          });
-        } else {
-          Vibration.vibrate(duration: 500, amplitude: 255);
-          setState(() {
-            _touchPosition = null;
-            _isInteractive = false;
-          });
-          Future.delayed(Duration(milliseconds: 500)).then((_) {
-            setState(() {
-              _path = [];
-              _isInteractive = true;
-            });
-          });
-        }
-      },
+      onPanUpdate: onPanUpdate,
+      onPanEnd: onPanEnd,
       child: CustomPaint(
         painter: MyPainter(
-          pathPoints: _path,
+          dotRadius: widget.dotRadius,
+          dotPositions: _dotPositions,
+          selectedDotIndices: _selectedDotIndices,
           touchPosition: _touchPosition,
-          color: _isInteractive ? Colors.black : Colors.red,
         ),
-        size: Size.infinite,
+        size: widget.size,
       ),
     );
   }
@@ -120,78 +129,62 @@ class _LockScreenState extends State<LockScreen> {
 
 class MyPainter extends CustomPainter {
   MyPainter({
-    this.pathPoints,
+    @required this.dotRadius,
+    @required this.dotPositions,
+    this.selectedDotIndices,
     this.touchPosition,
-    this.color,
   });
 
-  final List<Offset> pathPoints;
+  final double dotRadius;
+  final List<Offset> dotPositions;
+  final List<int> selectedDotIndices;
   final Offset touchPosition;
-  static List<double> xValues;
-  static List<double> yValues;
-  final Color color;
-
-  void _paintPath(Canvas canvas) {
-    if (pathPoints.isEmpty) return;
-
-    final path = Path();
-
-    path.moveTo(pathPoints.first.dx, pathPoints.first.dy);
-
-    for (final point in pathPoints) {
-      path.lineTo(point.dx, point.dy);
-    }
-    if (touchPosition != null) {
-      path.lineTo(touchPosition.dx, touchPosition.dy);
-    }
-
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..color = color;
-
-    canvas.drawPath(path, paint);
-  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    xValues = [
-      size.width / 2 - 100,
-      size.width / 2,
-      size.width / 2 + 100,
-    ];
+    if (dotPositions == null) return;
 
-    yValues = [
-      size.height / 2 - 150,
-      size.height / 2 - 50,
-      size.height / 2 + 50,
-      size.height / 2 + 150,
-    ];
+    final dotPaint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
 
-    final paint = Paint();
-    paint.color = Colors.black;
-    paint.strokeWidth = 2;
-    paint.style = PaintingStyle.stroke;
-
-    for (final x in xValues) {
-      for (final y in yValues) {
-        final position = Offset(x, y);
-        if (pathPoints.contains(position)) continue;
-        canvas.drawCircle(position, 10, paint);
-      }
+    for (final position in dotPositions) {
+      canvas.drawCircle(position, dotRadius, dotPaint);
     }
 
-    _paintPath(canvas);
+    if (selectedDotIndices.isNotEmpty) {
+      final path = Path();
+      final firstDotPosition = dotPositions[selectedDotIndices.first];
 
-    paint.style = PaintingStyle.fill;
-    paint.color = color;
-    for (final point in pathPoints) {
-      canvas.drawCircle(point, 10, paint);
+      path.moveTo(firstDotPosition.dx, firstDotPosition.dy);
+
+      for (final i in selectedDotIndices) {
+        final position = dotPositions[i];
+        path.lineTo(position.dx, position.dy);
+      }
+      if (touchPosition != null) {
+        path.lineTo(touchPosition.dx, touchPosition.dy);
+      }
+
+      final linePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = Colors.black;
+
+      canvas.drawPath(path, linePaint);
+
+      final selectedDotPaint = Paint()
+        ..style = PaintingStyle.fill
+        ..color = Colors.black;
+
+      for (final i in selectedDotIndices) {
+        final position = dotPositions[i];
+        canvas.drawCircle(position, dotRadius, selectedDotPaint);
+      }
     }
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) {
-    return true;
-  }
+  bool shouldRepaint(CustomPainter oldDelegate) => true;
 }
