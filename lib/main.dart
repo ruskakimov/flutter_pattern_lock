@@ -17,7 +17,7 @@ class MyApp extends StatelessWidget {
         ),
         body: Center(
           child: LockScreen(
-            size: Size.square(300),
+            rowCount: 5,
             password: [0, 1, 2],
           ),
         ),
@@ -33,7 +33,7 @@ class LockScreen extends StatefulWidget {
     this.columnCount = 3,
     this.dotGap = 100,
     this.dotRadius = 5,
-    this.size = const Size(300, 300),
+    this.padding = const EdgeInsets.all(30),
     @required this.password,
   }) : super(key: key);
 
@@ -42,7 +42,7 @@ class LockScreen extends StatefulWidget {
   final int columnCount;
   final double dotGap;
   final double dotRadius;
-  final Size size;
+  final EdgeInsets padding;
   // final Paint dotPaint;
   // final Paint linePaint;
 
@@ -51,24 +51,27 @@ class LockScreen extends StatefulWidget {
 }
 
 class _LockScreenState extends State<LockScreen> {
+  Size _canvasSize;
+
   List<Offset> _dotPositions;
   List<int> _selectedDotIndices = [];
 
   Offset _touchPosition;
   bool _isWrong = false;
 
-  List<Offset> calculateDotPositions() {
+  Size calculateCanvasSize() {
     final gridWidth = widget.dotGap * (widget.columnCount - 1);
     final gridHeight = widget.dotGap * (widget.rowCount - 1);
-    final shift =
-        Offset(widget.size.width - gridWidth, widget.size.height - gridHeight) /
-            2;
-    List<Offset> dotPositions = [];
+    return Size(gridWidth + widget.padding.horizontal,
+        gridHeight + widget.padding.vertical);
+  }
 
+  List<Offset> calculateDotPositions() {
+    List<Offset> dotPositions = [];
     for (var r = 0; r < widget.rowCount; r++) {
       for (var c = 0; c < widget.columnCount; c++) {
         final dot = Offset(c * widget.dotGap, r * widget.dotGap);
-        dotPositions.add(dot + shift);
+        dotPositions.add(dot + widget.padding.topLeft);
       }
     }
     return dotPositions;
@@ -94,10 +97,11 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   void onPanEnd(DragEndDetails details) {
-    if (_isWrong) return;
+    if (_isWrong || _selectedDotIndices.isEmpty) return;
     // check selected for correctness if selected is not empty
     // if wrong set _isWrong = true for 1 second, call onWrongEntry
     // else call onCorrectEntry
+    print(_selectedDotIndices);
     setState(() {
       _selectedDotIndices = [];
     });
@@ -106,6 +110,7 @@ class _LockScreenState extends State<LockScreen> {
   @override
   void initState() {
     super.initState();
+    _canvasSize = calculateCanvasSize();
     _dotPositions = calculateDotPositions();
   }
 
@@ -121,7 +126,7 @@ class _LockScreenState extends State<LockScreen> {
           selectedDotIndices: _selectedDotIndices,
           touchPosition: _touchPosition,
         ),
-        size: widget.size,
+        size: _canvasSize,
       ),
     );
   }
