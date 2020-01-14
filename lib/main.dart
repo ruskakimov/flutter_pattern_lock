@@ -19,7 +19,15 @@ class MyApp extends StatelessWidget {
           child: LockScreen(
             columnCount: 3,
             rowCount: 3,
-            password: [0, 1, 2],
+            dotGap: 100,
+            dotRadius: 5,
+            password: [1, 3, 4, 6, 7, 5, 2],
+            onCorrect: () {
+              print('correct!');
+            },
+            onWrong: () {
+              print('wrong!');
+            },
           ),
         ),
       ),
@@ -35,6 +43,8 @@ class LockScreen extends StatefulWidget {
     this.dotGap = 100,
     this.dotRadius = 5,
     @required this.password,
+    this.onCorrect,
+    this.onWrong,
   }) : super(key: key);
 
   final List<int> password;
@@ -42,8 +52,8 @@ class LockScreen extends StatefulWidget {
   final int columnCount;
   final double dotGap;
   final double dotRadius;
-  // final Paint dotPaint;
-  // final Paint linePaint;
+  final Function onCorrect;
+  final Function onWrong;
 
   @override
   _LockScreenState createState() => _LockScreenState();
@@ -78,12 +88,18 @@ class _LockScreenState extends State<LockScreen> {
       setState(() {
         _selectedDotIndices = [];
       });
+      widget.onCorrect();
+      Scaffold.of(context).showSnackBar(SnackBar(
+        content: Text('Correct password'),
+      ));
     } else {
       setState(() {
         _isWrong = true;
         _touchPosition = null;
       });
-      Vibration.vibrate(duration: 500, amplitude: 255);
+      Vibration.vibrate(duration: 300, amplitude: 255);
+      widget.onWrong();
+      print(_selectedDotIndices);
       Future.delayed(Duration(milliseconds: 500)).then((_) {
         setState(() {
           _isWrong = false;
@@ -106,6 +122,7 @@ class _LockScreenState extends State<LockScreen> {
           dotRadius: widget.dotRadius,
           selectedDotIndices: _selectedDotIndices,
           touchPosition: _touchPosition,
+          selectColor: _isWrong ? Colors.red : Colors.blue,
         ),
         size: Size.infinite,
       ),
@@ -121,6 +138,7 @@ class MyPainter extends CustomPainter {
     @required this.dotRadius,
     this.selectedDotIndices,
     this.touchPosition,
+    this.selectColor,
   });
 
   final int rowCount;
@@ -129,11 +147,12 @@ class MyPainter extends CustomPainter {
   final double dotRadius;
   final List<int> selectedDotIndices;
   final Offset touchPosition;
+  final Color selectColor;
 
   static List<Offset> dotPositions;
   static String serializedLayoutState;
 
-  List<Offset> getDotPositions(Size canvasSize) {
+  List<Offset> calculateDotPositions(Size canvasSize) {
     final gridWidth = dotGap * (columnCount - 1);
     final gridHeight = dotGap * (rowCount - 1);
     final shiftToCenter =
@@ -157,15 +176,15 @@ class MyPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (MyPainter.dotPositions == null ||
         MyPainter.serializedLayoutState != serializeLayoutState(size)) {
-      MyPainter.dotPositions = getDotPositions(size);
+      MyPainter.dotPositions = calculateDotPositions(size);
       MyPainter.serializedLayoutState = serializeLayoutState(size);
       print('recalculated dot positions');
     }
 
     final dotPaint = Paint()
-      ..color = Colors.black
+      ..color = Colors.grey
       ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+      ..style = PaintingStyle.fill;
 
     for (final position in dotPositions) {
       canvas.drawCircle(position, dotRadius, dotPaint);
@@ -188,13 +207,13 @@ class MyPainter extends CustomPainter {
       final linePaint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
-        ..color = Colors.black;
+        ..color = selectColor ?? Colors.black;
 
       canvas.drawPath(path, linePaint);
 
       final selectedDotPaint = Paint()
         ..style = PaintingStyle.fill
-        ..color = Colors.black;
+        ..color = selectColor ?? Colors.black;
 
       for (final i in selectedDotIndices) {
         final position = dotPositions[i];
