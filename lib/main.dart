@@ -17,7 +17,8 @@ class MyApp extends StatelessWidget {
         ),
         body: Center(
           child: LockScreen(
-            rowCount: 5,
+            columnCount: 4,
+            rowCount: 4,
             password: [0, 1, 2],
           ),
         ),
@@ -82,7 +83,6 @@ class _LockScreenState extends State<LockScreen> {
     setState(() {
       _touchPosition = details.localPosition;
     });
-    // if one is close enough and index is not in _selected, add index to _selected and vibrate
     final selectedDotIndex = _dotPositions.indexWhere(
         (position) => (details.localPosition - position).distance < 30);
 
@@ -90,7 +90,6 @@ class _LockScreenState extends State<LockScreen> {
         !_selectedDotIndices.contains(selectedDotIndex)) {
       setState(() {
         _selectedDotIndices.add(selectedDotIndex);
-        print(_selectedDotIndices);
       });
       Vibration.vibrate(duration: 20, amplitude: 255);
     }
@@ -98,13 +97,23 @@ class _LockScreenState extends State<LockScreen> {
 
   void onPanEnd(DragEndDetails details) {
     if (_isWrong || _selectedDotIndices.isEmpty) return;
-    // check selected for correctness if selected is not empty
-    // if wrong set _isWrong = true for 1 second, call onWrongEntry
-    // else call onCorrectEntry
-    print(_selectedDotIndices);
-    setState(() {
-      _selectedDotIndices = [];
-    });
+    if (_selectedDotIndices.toString() == widget.password.toString()) {
+      setState(() {
+        _selectedDotIndices = [];
+      });
+    } else {
+      setState(() {
+        _isWrong = true;
+        _touchPosition = null;
+      });
+      Vibration.vibrate(duration: 500, amplitude: 255);
+      Future.delayed(Duration(milliseconds: 500)).then((_) {
+        setState(() {
+          _isWrong = false;
+          _selectedDotIndices = [];
+        });
+      });
+    }
   }
 
   @override
@@ -138,12 +147,14 @@ class MyPainter extends CustomPainter {
     @required this.dotPositions,
     this.selectedDotIndices,
     this.touchPosition,
+    this.dotPaintt,
   });
 
   final double dotRadius;
   final List<Offset> dotPositions;
   final List<int> selectedDotIndices;
   final Offset touchPosition;
+  final Paint dotPaintt;
 
   @override
   void paint(Canvas canvas, Size size) {
