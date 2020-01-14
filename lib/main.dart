@@ -17,8 +17,8 @@ class MyApp extends StatelessWidget {
         ),
         body: Center(
           child: LockScreen(
-            columnCount: 4,
-            rowCount: 4,
+            columnCount: 3,
+            rowCount: 3,
             password: [0, 1, 2],
           ),
         ),
@@ -34,7 +34,6 @@ class LockScreen extends StatefulWidget {
     this.columnCount = 3,
     this.dotGap = 100,
     this.dotRadius = 5,
-    this.padding = const EdgeInsets.all(30),
     @required this.password,
   }) : super(key: key);
 
@@ -43,7 +42,6 @@ class LockScreen extends StatefulWidget {
   final int columnCount;
   final double dotGap;
   final double dotRadius;
-  final EdgeInsets padding;
   // final Paint dotPaint;
   // final Paint linePaint;
 
@@ -52,38 +50,17 @@ class LockScreen extends StatefulWidget {
 }
 
 class _LockScreenState extends State<LockScreen> {
-  Size _canvasSize;
-
-  List<Offset> _dotPositions;
   List<int> _selectedDotIndices = [];
 
   Offset _touchPosition;
   bool _isWrong = false;
-
-  Size calculateCanvasSize() {
-    final gridWidth = widget.dotGap * (widget.columnCount - 1);
-    final gridHeight = widget.dotGap * (widget.rowCount - 1);
-    return Size(gridWidth + widget.padding.horizontal,
-        gridHeight + widget.padding.vertical);
-  }
-
-  List<Offset> calculateDotPositions() {
-    List<Offset> dotPositions = [];
-    for (var r = 0; r < widget.rowCount; r++) {
-      for (var c = 0; c < widget.columnCount; c++) {
-        final dot = Offset(c * widget.dotGap, r * widget.dotGap);
-        dotPositions.add(dot + widget.padding.topLeft);
-      }
-    }
-    return dotPositions;
-  }
 
   void onPanUpdate(DragUpdateDetails details) {
     if (_isWrong) return;
     setState(() {
       _touchPosition = details.localPosition;
     });
-    final selectedDotIndex = _dotPositions.indexWhere(
+    final selectedDotIndex = MyPainter.dotPositions.indexWhere(
         (position) => (details.localPosition - position).distance < 30);
 
     if (selectedDotIndex != -1 &&
@@ -117,25 +94,20 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _canvasSize = calculateCanvasSize();
-    _dotPositions = calculateDotPositions();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onPanUpdate: onPanUpdate,
       onPanEnd: onPanEnd,
       child: CustomPaint(
         painter: MyPainter(
+          rowCount: widget.rowCount,
+          columnCount: widget.columnCount,
+          dotGap: widget.dotGap,
           dotRadius: widget.dotRadius,
-          dotPositions: _dotPositions,
           selectedDotIndices: _selectedDotIndices,
           touchPosition: _touchPosition,
         ),
-        size: _canvasSize,
+        size: Size.infinite,
       ),
     );
   }
@@ -143,22 +115,52 @@ class _LockScreenState extends State<LockScreen> {
 
 class MyPainter extends CustomPainter {
   MyPainter({
+    @required this.rowCount,
+    @required this.columnCount,
+    @required this.dotGap,
     @required this.dotRadius,
-    @required this.dotPositions,
     this.selectedDotIndices,
     this.touchPosition,
-    this.dotPaintt,
   });
 
+  final int rowCount;
+  final int columnCount;
+  final double dotGap;
   final double dotRadius;
-  final List<Offset> dotPositions;
   final List<int> selectedDotIndices;
   final Offset touchPosition;
-  final Paint dotPaintt;
+
+  static List<Offset> dotPositions;
+  static String serializedLayoutState;
+
+  List<Offset> getDotPositions(Size canvasSize) {
+    final gridWidth = dotGap * (columnCount - 1);
+    final gridHeight = dotGap * (rowCount - 1);
+    final shiftToCenter =
+        Offset(canvasSize.width - gridWidth, canvasSize.height - gridHeight) /
+            2;
+    List<Offset> dotPositions = [];
+    for (var r = 0; r < rowCount; r++) {
+      for (var c = 0; c < columnCount; c++) {
+        final dot = Offset(c * dotGap, r * dotGap);
+        dotPositions.add(dot + shiftToCenter);
+      }
+    }
+    return dotPositions;
+  }
+
+  String serializeLayoutState(Size size) {
+    return '$rowCount $columnCount $dotGap ${size.toString()}';
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (dotPositions == null) return;
+    if (MyPainter.dotPositions == null ||
+        MyPainter.serializedLayoutState != serializeLayoutState(size)) {
+      MyPainter.dotPositions = getDotPositions(size);
+      MyPainter.serializedLayoutState = serializeLayoutState(size);
+      print('recalculated dot positions');
+    }
 
     final dotPaint = Paint()
       ..color = Colors.black
